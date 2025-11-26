@@ -9,7 +9,7 @@ const {
   getPollResults
 } = require('../controllers/pollController');
 const { protect, authorize } = require('../middleware/auth');
-const { requireWebmaster, requireOwnershipOrAdmin } = require('../middleware/roleCheck');
+const { requireWebmaster, requireOwnershipOrWebmaster } = require('../middleware/roleCheck');
 
 // All routes are protected
 router.use(protect);
@@ -108,7 +108,7 @@ router.get('/my/voted', async (req, res) => {
 // @desc    Update poll (Admin/Webmaster only)
 // @route   PUT /api/polls/:id
 // @access  Private (Webmaster/Admin only)
-router.put('/:id', requireOwnershipOrAdmin('Poll'), async (req, res) => {
+router.put('/:id', requireOwnershipOrWebmaster('Poll'), async (req, res) => {
   try {
     const Poll = require('../models/Poll');
     
@@ -134,7 +134,7 @@ router.put('/:id', requireOwnershipOrAdmin('Poll'), async (req, res) => {
 // @desc    Delete poll (Admin/Webmaster only)
 // @route   DELETE /api/polls/:id
 // @access  Private (Webmaster/Admin only)
-router.delete('/:id', requireOwnershipOrAdmin('Poll'), async (req, res) => {
+router.delete('/:id', requireOwnershipOrWebmaster('Poll'), async (req, res) => {
   try {
     const Poll = require('../models/Poll');
     

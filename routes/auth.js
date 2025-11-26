@@ -4,7 +4,8 @@ const router = express.Router();
 const {
   googleLogin,
   getCurrentUser,
-  verifyToken
+  verifyToken,
+  mockGoogleLogin
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimiter');
@@ -26,5 +27,8 @@ router.get('/me', protect, getCurrentUser);
 // @route   GET /api/auth/verify
 // @access  Private
 router.get('/verify', protect, verifyToken);
+
+
+router.post('/mock-google-login', mockGoogleLogin);
 
 module.exports = router;

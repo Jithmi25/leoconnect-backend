@@ -11,7 +11,7 @@ const {
   addComment
 } = require('../controllers/postController');
 const { protect, authorize } = require('../middleware/auth');
-const { requireOwnershipOrAdmin } = require('../middleware/roleCheck');
+const { requireOwnershipOrWebmaster } = require('../middleware/roleCheck');
 
 // All routes are protected
 router.use(protect);
@@ -34,12 +34,12 @@ router.post('/', createPost);
 // @desc    Update post
 // @route   PUT /api/posts/:id
 // @access  Private
-router.put('/:id', requireOwnershipOrAdmin('Post'), updatePost);
+router.put('/:id', requireOwnershipOrWebmaster('Post'), updatePost);
 
 // @desc    Delete post
 // @route   DELETE /api/posts/:id
 // @access  Private
-router.delete('/:id', requireOwnershipOrAdmin('Post'), deletePost);
+router.delete('/:id', requireOwnershipOrWebmaster('Post'), deletePost);
 
 // @desc    Like/unlike post
 // @route   POST /api/posts/:id/like

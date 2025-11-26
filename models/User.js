@@ -23,14 +23,12 @@ const badgeSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema({
   googleId: {
     type: String,
-    required: true,
-    unique: true,
-    sparse: true
+    required: true
   },
   email: {
     type: String,
     required: true,
-    unique: true,
+    lowercase: true,
     lowercase: true,
     trim: true
   },
@@ -58,7 +56,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['leo_member', 'webmaster', 'admin'],
+    enum: ['leo_member', 'webmaster'],
     default: 'leo_member'
   },
   badges: [badgeSchema],
@@ -95,8 +93,10 @@ const userSchema = new mongoose.Schema({
 });
 
 // Define indexes separately to avoid duplicates
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
+// Create unique indexes here (rather than via field `unique: true`) to
+// ensure a single index declaration and avoid duplicate-index warnings.
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ club: 1, district: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ serviceHours: -1 });

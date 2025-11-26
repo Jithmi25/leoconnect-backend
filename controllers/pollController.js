@@ -179,10 +179,13 @@ exports.voteOnPoll = async (req, res) => {
       });
     }
 
+    // Handle vote counting manually
     if (existingVote && poll.allowMultiple) {
+      // Decrement old vote count
+      poll.options[existingVote.optionIndex].votes -= 1;
       // Update existing vote
       existingVote.optionIndex = optionIndex;
-    } else {
+    } else if (!existingVote) {
       // Add new vote
       poll.votes.push({
         user: req.user.id,
@@ -190,7 +193,7 @@ exports.voteOnPoll = async (req, res) => {
       });
     }
 
-    // Update option votes count
+    // Increment new vote count
     poll.options[optionIndex].votes += 1;
 
     await poll.save();
@@ -210,7 +213,6 @@ exports.voteOnPoll = async (req, res) => {
     });
   }
 };
-
 // @desc    Get poll results
 // @route   GET /api/polls/:id/results
 // @access  Private

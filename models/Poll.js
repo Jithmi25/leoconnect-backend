@@ -1,4 +1,4 @@
-// models/Poll.js
+// models/Poll.js - SIMPLIFIED VERSION
 const mongoose = require('mongoose');
 
 const optionSchema = new mongoose.Schema({
@@ -105,21 +105,6 @@ pollSchema.methods.hasUserVoted = function(userId) {
   return this.votes.some(vote => vote.user.toString() === userId.toString());
 };
 
-// Pre-save middleware to update option votes count
-pollSchema.pre('save', function(next) {
-  // Reset all option votes
-  this.options.forEach(option => {
-    option.votes = 0;
-  });
-
-  // Count votes for each option
-  this.votes.forEach(vote => {
-    if (this.options[vote.optionIndex]) {
-      this.options[vote.optionIndex].votes += 1;
-    }
-  });
-
-  next();
-});
+// REMOVED the problematic pre-save middleware
 
 module.exports = mongoose.model('Poll', pollSchema);

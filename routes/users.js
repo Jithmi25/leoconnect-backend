@@ -43,7 +43,7 @@ router.get('/leaderboard/all', getLeaderboard);
 // @desc    Get user statistics (Admin only)
 // @route   GET /api/users/stats/overview
 // @access  Private (Admin)
-router.get('/stats/overview', authorize('admin'), async (req, res) => {
+router.get('/stats/overview', requireWebmaster, async (req, res) => {
   try {
     const User = require('../models/User');
     

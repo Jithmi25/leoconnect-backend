@@ -11,7 +11,7 @@ const {
   unregisterFromEvent
 } = require('../controllers/eventController');
 const { protect, authorize } = require('../middleware/auth');
-const { requireWebmaster, requireOwnershipOrAdmin } = require('../middleware/roleCheck');
+const { requireWebmaster, requireOwnershipOrWebmaster } = require('../middleware/roleCheck');
 
 // All routes are protected
 router.use(protect);
@@ -34,12 +34,12 @@ router.post('/', requireWebmaster, createEvent);
 // @desc    Update event
 // @route   PUT /api/events/:id
 // @access  Private (Webmaster/Admin only)
-router.put('/:id', requireOwnershipOrAdmin('Event'), updateEvent);
+router.put('/:id', requireOwnershipOrWebmaster('Event'), updateEvent);
 
 // @desc    Delete event
 // @route   DELETE /api/events/:id
 // @access  Private (Webmaster/Admin only)
-router.delete('/:id', requireOwnershipOrAdmin('Event'), deleteEvent);
+router.delete('/:id', requireOwnershipOrWebmaster('Event'), deleteEvent);
 
 // @desc    Register for event
 // @route   POST /api/events/:id/register

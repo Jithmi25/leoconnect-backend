@@ -36,7 +36,7 @@ router.delete('/image', deleteImage);
 // @desc    Get upload statistics (Admin only)
 // @route   GET /api/upload/stats
 // @access  Private (Admin only)
-router.get('/stats', authorize('admin'), getUploadStats);
+router.get('/stats', requireWebmaster, getUploadStats);
 
 // @desc    Update user profile picture
 // @route   POST /api/upload/profile-picture

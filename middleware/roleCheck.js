@@ -14,11 +14,10 @@ exports.requireRole = (requiredRole) => {
 
     const userRole = req.user.role;
     
-    // Define role hierarchy
+    // Updated role hierarchy - webmaster has admin privileges
     const roleHierarchy = {
       'leo_member': 1,
       'webmaster': 2,
-      'admin': 3
     };
 
     if (roleHierarchy[userRole] < roleHierarchy[requiredRole]) {
@@ -32,33 +31,33 @@ exports.requireRole = (requiredRole) => {
   };
 };
 
-// @desc    Check if user is admin
+// @desc    Check if user is admin OR webmaster
 // @access  Private
 exports.requireAdmin = (req, res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || (req.user.role !== 'webmaster')) {
     return res.status(403).json({
       success: false,
-      message: 'Admin access required'
+      message: 'Admin or Webmaster access required'
     });
   }
   next();
 };
 
-// @desc    Check if user is webmaster or admin
+// @desc    Check if user is webmaster (with admin privileges)
 // @access  Private
 exports.requireWebmaster = (req, res, next) => {
-  if (!req.user || (req.user.role !== 'webmaster' && req.user.role !== 'admin')) {
+  if (!req.user || req.user.role !== 'webmaster') {
     return res.status(403).json({
       success: false,
-      message: 'Webmaster or Admin access required'
+      message: 'Webmaster access required'
     });
   }
   next();
 };
 
-// @desc    Check if user owns the resource or is admin
+// @desc    Check if user owns the resource or is webmaster
 // @access  Private
-exports.requireOwnershipOrAdmin = (modelName) => {
+exports.requireOwnershipOrWebmaster = (modelName) => {
   return async (req, res, next) => {
     try {
       const model = require(`../models/${modelName}`);
@@ -71,11 +70,11 @@ exports.requireOwnershipOrAdmin = (modelName) => {
         });
       }
 
-      // Check if user is admin or owns the resource
+      // Check if user is webmaster or owns the resource
       const isOwner = resource.author && resource.author.toString() === req.user.id;
-      const isAdmin = req.user.role === 'admin';
+      const isWebmaster = req.user.role === 'webmaster';
 
-      if (!isOwner && !isAdmin) {
+      if (!isOwner && !isWebmaster) {
         return res.status(403).json({
           success: false,
           message: 'Not authorized to access this resource'
@@ -93,26 +92,4 @@ exports.requireOwnershipOrAdmin = (modelName) => {
       });
     }
   };
-};
-
-// @desc    Check if user is in same club/district or admin
-// @access  Private
-exports.requireSameClubOrAdmin = (req, res, next) => {
-  const userClub = req.user.club;
-  const userDistrict = req.user.district;
-  const targetClub = req.body.club || req.params.club;
-  const targetDistrict = req.body.district || req.params.district;
-
-  if (req.user.role === 'admin') {
-    return next();
-  }
-
-  if (userClub === targetClub && userDistrict === targetDistrict) {
-    return next();
-  }
-
-  res.status(403).json({
-    success: false,
-    message: 'Not authorized to access resources from other clubs/districts'
-  });
 };

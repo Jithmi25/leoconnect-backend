@@ -1,13 +1,13 @@
 // controllers/authController.js
 const User = require('../models/User');
-const { generateToken, isValidEmail, sanitizeInput } = require('../utils/authUtils'); 
+const { generateToken } = require('../utils/authUtils');
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-
-// @desc    Google OAuth login
+// @desc    Google OAuth login with email verification
 // @route   POST /api/auth/google
 // @access  Public
 exports.googleLogin = async (req, res) => {
@@ -21,78 +21,98 @@ exports.googleLogin = async (req, res) => {
       });
     }
 
-    // Verify Google token
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    let googleUser;
     
-    const { sub: googleId, name, email, picture } = ticket.getPayload();
+    // Method 1: Verify using Google OAuth2Client
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      googleUser = ticket.getPayload();
+    } catch (verifyError) {
+      console.log('OAuth2Client verification failed, trying axios method...');
+      
+      // Method 2: Verify using axios call to Google API
+      try {
+        const response = await axios({
+          method: 'get',
+          url: 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' + token,
+          withCredentials: true
+        });
+        
+        if (response.data && response.data.email) {
+          googleUser = {
+            sub: response.data.kid,
+            name: response.data.name,
+            email: response.data.email,
+            picture: response.data.picture
+          };
+        } else {
+          throw new Error('Invalid token response from Google');
+        }
+      } catch (axiosError) {
+        console.error('Both verification methods failed:', axiosError);
+        return res.status(401).json({
+          success: false,
+          message: 'Google token verification failed'
+        });
+      }
+    }
+
+    const { sub: googleId, name, email, picture } = googleUser;
     
     console.log(`🔐 Google login attempt for: ${email}`);
     
-    // Find or create user
-    let user = await User.findOne({ 
-      $or: [{ googleId }, { email }] 
-    });
-
-    if (!user) {
-      // Create new user with minimal data
-      user = await User.create({
-        googleId,
-        email,
-        fullName: name,
-        displayName: name.split(' ')[0],
-        profilePhoto: picture,
-        isVerified: true,
+    // Check if user exists in database
+    const existingUser = await User.findOne({ email });
+    
+    if (!existingUser) {
+      console.log(`❌ User not found in database: ${email}`);
+      return res.status(404).json({
+        success: false,
+        message: 'User not found. Please contact administrator to register.',
+        requiresRegistration: true
       });
-      console.log(`✅ New user created: ${email}`);
-    } else {
-      console.log(`✅ Existing user found: ${email}`);
-      // Update Google info if changed
-      user.googleId = googleId;
-      user.profilePhoto = picture;
-      user.fullName = name;
-      user.lastLogin = new Date();
-      await user.save();
     }
 
+    // Update user's Google info and last login
+    existingUser.googleId = googleId;
+    existingUser.profilePhoto = picture;
+    existingUser.fullName = name;
+    existingUser.lastLogin = new Date();
+    await existingUser.save();
+
     // Generate JWT
-    const jwtToken = generateToken(user._id);
+    const jwtToken = generateToken(existingUser._id);
     
-    // Return complete user data to frontend
+    // Return user data
     const userResponse = {
-      id: user._id,
-      googleId: user.googleId,
-      email: user.email,
-      fullName: user.fullName,
-      displayName: user.displayName,
-      profilePhoto: user.profilePhoto,
-      club: user.club,
-      district: user.district,
-      role: user.role,
-      badges: user.badges || [],
-      serviceHours: user.serviceHours || 0,
-      leoId: user.leoId,
-      contactNumber: user.contactNumber,
-      joinDate: user.joinDate,
-      isVerified: user.isVerified,
-      isProfileComplete: !!(user.club && user.district)
+      id: existingUser._id,
+      googleId: existingUser.googleId,
+      email: existingUser.email,
+      fullName: existingUser.fullName,
+      displayName: existingUser.displayName,
+      profilePhoto: existingUser.profilePhoto,
+      club: existingUser.club,
+      district: existingUser.district,
+      role: existingUser.role,
+      badges: existingUser.badges || [],
+      serviceHours: existingUser.serviceHours || 0,
+      leoId: existingUser.leoId,
+      contactNumber: existingUser.contactNumber,
+      joinDate: existingUser.joinDate,
+      isVerified: existingUser.isVerified,
+      isProfileComplete: !!(existingUser.club && existingUser.district)
     };
     
-    console.log(`📤 Sending user data for: ${user.email}`, {
-      club: user.club,
-      district: user.district,
-      role: user.role,
-      badges: user.badges?.length,
-      serviceHours: user.serviceHours
-    });
+    console.log(`✅ Login successful for: ${existingUser.email}`);
     
     res.status(200).json({
       success: true,
       token: jwtToken,
       user: userResponse,
-      requiresProfileSetup: !user.club || !user.district
+      requiresProfileSetup: !existingUser.club || !existingUser.district
     });
     
   } catch (error) {
@@ -105,63 +125,20 @@ exports.googleLogin = async (req, res) => {
       });
     }
     
-    res.status(401).json({
+    res.status(500).json({
       success: false,
-      message: 'Google authentication failed',
+      message: 'Authentication failed',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
-
-// exports.googleLogin = async (req, res) => {
-//   try {
-//     const { token } = req.body;
-    
-//     // Use validation util
-//     if (!token) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Google token is required'
-//       });
-//     }
-
-//     const ticket = await client.verifyIdToken({
-//       idToken: token,
-//       audience: process.env.GOOGLE_CLIENT_ID,
-//     });
-    
-//     const { sub: googleId, name, email, picture } = ticket.getPayload();
-    
-//     // Use email validation util
-//     if (!isValidEmail(email)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Invalid email format'
-//       });
-//     }
-
-//     // Use sanitization util
-//     const sanitizedName = sanitizeInput(name);
-    
-//     // ... rest of your existing code
-    
-//     // Use token generation util
-//     const jwtToken = generateToken(user._id);
-    
-//     // ... rest of your existing code
-    
-//   } catch (error) {
-//     // ... error handling
-//   }
-// };
 
 // @desc    Get current user profile
 // @route   GET /api/auth/me
 // @access  Private
 exports.getCurrentUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
-      .select('-__v');
+    const user = await User.findById(req.user.id).select('-__v');
 
     if (!user) {
       return res.status(404).json({
@@ -226,14 +203,15 @@ exports.verifyToken = async (req, res) => {
   }
 };
 
-
-// In controllers/authController.js - Update mockGoogleLogin
+// @desc    Mock login for development
+// @route   POST /api/auth/mock-google-login
+// @access  Public
 exports.mockGoogleLogin = async (req, res) => {
   try {
     const User = require('../models/User');
     const { email = "leo.amala@gmail.com", role = "leo_member" } = req.body;
 
-    // Find or create user based on email and role
+    // For mock login, always create or find user (bypass email check)
     let user = await User.findOne({ email });
 
     if (!user) {
@@ -252,7 +230,6 @@ exports.mockGoogleLogin = async (req, res) => {
         isVerified: true
       };
 
-      // Add badges based on role
       if (role === "webmaster") {
         userData.badges = [
           {
@@ -280,7 +257,6 @@ exports.mockGoogleLogin = async (req, res) => {
       console.log(`✅ ${role} user created:`, user.email);
     }
 
-    // Generate JWT token
     const jwtToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: '30d'
     });
@@ -320,7 +296,3 @@ exports.mockGoogleLogin = async (req, res) => {
     });
   }
 };
-
-// Note: The Google login handler is defined earlier in this file.
-// The duplicate implementation below was removed because it overwrote
-// the correct handler and referenced an undefined `generateJwtToken`.

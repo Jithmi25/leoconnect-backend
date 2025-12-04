@@ -1,135 +1,35 @@
 // controllers/authController.js
 const User = require('../models/User');
-const { generateToken } = require('../utils/authUtils');
+const { generateToken, verifyToken, getTokenFromHeader, hasRole, canAccessResource, generateVerificationCode, isValidEmail, validatePassword, calculatePasswordStrength, sanitizeInput, generateRandomString, needsTokenRefresh } = require('../utils/authUtils');
 const { OAuth2Client } = require('google-auth-library');
-const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const jwt = require("jsonwebtoken");
+const verifyGoogleToken = require("../config/googleAuth");
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const client = new OAuth2Client(process.env.WEB_CLIENT_ID);
 
-// @desc    Google OAuth login with email verification
-// @route   POST /api/auth/google
-// @access  Public
 exports.googleLogin = async (req, res) => {
   try {
-    const { token } = req.body;
-    
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        message: 'Google token is required'
-      });
-    }
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ success: false, message: "ID Token required" });
 
-    let googleUser;
-    
-    // Method 1: Verify using Google OAuth2Client
-    try {
-      const ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-      googleUser = ticket.getPayload();
-    } catch (verifyError) {
-      console.log('OAuth2Client verification failed, trying axios method...');
-      
-      // Method 2: Verify using axios call to Google API
-      try {
-        const response = await axios({
-          method: 'get',
-          url: 'https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' + token,
-          withCredentials: true
-        });
-        
-        if (response.data && response.data.email) {
-          googleUser = {
-            sub: response.data.kid,
-            name: response.data.name,
-            email: response.data.email,
-            picture: response.data.picture
-          };
-        } else {
-          throw new Error('Invalid token response from Google');
-        }
-      } catch (axiosError) {
-        console.error('Both verification methods failed:', axiosError);
-        return res.status(401).json({
-          success: false,
-          message: 'Google token verification failed'
-        });
-      }
-    }
+    const googleUser = await verifyGoogleToken(idToken);
+    const { email, name, picture } = googleUser;
 
-    const { sub: googleId, name, email, picture } = googleUser;
-    
-    console.log(`🔐 Google login attempt for: ${email}`);
-    
-    // Check if user exists in database
-    const existingUser = await User.findOne({ email });
-    
-    if (!existingUser) {
-      console.log(`❌ User not found in database: ${email}`);
-      return res.status(404).json({
-        success: false,
-        message: 'User not found. Please contact administrator to register.',
-        requiresRegistration: true
-      });
-    }
+    const user = await User.findOne({ email });
+    if (!user) return res.status(401).json({ success: false, message: "You are not registered" });
 
-    // Update user's Google info and last login
-    existingUser.googleId = googleId;
-    existingUser.profilePhoto = picture;
-    existingUser.fullName = name;
-    existingUser.lastLogin = new Date();
-    await existingUser.save();
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-    // Generate JWT
-    const jwtToken = generateToken(existingUser._id);
-    
-    // Return user data
-    const userResponse = {
-      id: existingUser._id,
-      googleId: existingUser.googleId,
-      email: existingUser.email,
-      fullName: existingUser.fullName,
-      displayName: existingUser.displayName,
-      profilePhoto: existingUser.profilePhoto,
-      club: existingUser.club,
-      district: existingUser.district,
-      role: existingUser.role,
-      badges: existingUser.badges || [],
-      serviceHours: existingUser.serviceHours || 0,
-      leoId: existingUser.leoId,
-      contactNumber: existingUser.contactNumber,
-      joinDate: existingUser.joinDate,
-      isVerified: existingUser.isVerified,
-      isProfileComplete: !!(existingUser.club && existingUser.district)
-    };
-    
-    console.log(`✅ Login successful for: ${existingUser.email}`);
-    
-    res.status(200).json({
+    res.json({
       success: true,
-      token: jwtToken,
-      user: userResponse,
-      requiresProfileSetup: !existingUser.club || !existingUser.district
+      token,
+      user: { name, email, picture, role: user.role }
     });
-    
-  } catch (error) {
-    console.error('❌ Google auth error:', error);
-    
-    if (error.message.includes('Token used too late')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication token expired. Please try again.'
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Authentication failed',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Google login failed", error: err.message });
   }
 };
 

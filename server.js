@@ -1,4 +1,4 @@
-// server.js
+// server.js 
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -19,6 +19,7 @@ const postRoutes = require('./routes/posts');
 const eventRoutes = require('./routes/events');
 const pollRoutes = require('./routes/polls');
 const uploadRoutes = require('./routes/upload');
+const superAdminRoutes = require('./routes/superAdmin'); 
 
 // Connect to database
 connectDB();
@@ -75,7 +76,16 @@ app.get('/api/health', (req, res) => {
     message: '🚀 LeoConnect Backend API is running!',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    version: '1.0.0'
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      users: '/api/users',
+      superAdmin: '/api/super-admin', // NEW
+      posts: '/api/posts',
+      events: '/api/events',
+      polls: '/api/polls',
+      upload: '/api/upload'
+    }
   });
 });
 
@@ -87,7 +97,8 @@ app.get('/api', (req, res) => {
     version: '1.0.0',
     endpoints: {
       auth: '/api/auth',
-      users: '/api/users', 
+      users: '/api/users',
+      superAdmin: '/api/super-admin', // NEW
       posts: '/api/posts',
       events: '/api/events',
       polls: '/api/polls',
@@ -101,13 +112,14 @@ app.get('/api', (req, res) => {
 // ========================
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/super-admin', superAdminRoutes); 
 app.use('/api/posts', postRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/polls', pollRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // ========================
-// 404 Handler for ALL routes - FIXED (no asterisk)
+// 404 Handler
 // ========================
 app.use((req, res) => {
   if (req.originalUrl.startsWith('/api/')) {
@@ -179,6 +191,7 @@ const server = app.listen(PORT, () => {
   📡 Environment: ${process.env.NODE_ENV || 'development'}
   🌐 Server URL: http://localhost:${PORT}
   📊 API Health: http://localhost:${PORT}/api/health
+  👑 Super Admin API: /api/super-admin
   ⏰ Started at: ${new Date().toLocaleString()}
   ======================================
   `);

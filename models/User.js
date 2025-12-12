@@ -20,6 +20,26 @@ const badgeSchema = new mongoose.Schema({
   icon: String
 });
 
+const roleHistorySchema = new mongoose.Schema({
+  previousRole: String,
+  newRole: String,
+  assignedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  assignedByName: String,
+  startDate: {
+    type: Date,
+    default: Date.now
+  },
+  remark: String,
+  status: {
+    type: String,
+    enum: ['active', 'expired', 'revoked'],
+    default: 'active'
+  }
+}, { timestamps: true });
+
 const userSchema = new mongoose.Schema({
   googleId: {
     type: String,
@@ -29,8 +49,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
     lowercase: true,
-    lowercase: true,
-    trim: true
+    trim: true,
+    unique: true
   },
   fullName: {
     type: String,
@@ -47,16 +67,18 @@ const userSchema = new mongoose.Schema({
     default: ''
   },
   club: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Club',
     trim: true
   },
   district: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'District',
     trim: true
   },
   role: {
     type: String,
-    enum: ['leo_member', 'webmaster','superAdmin'],
+    enum: ['leo_member', 'webmaster', 'super_admin'],
     default: 'leo_member'
   },
   badges: [badgeSchema],
@@ -87,21 +109,23 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
     default: Date.now
+  },
+  roleHistory: [roleHistorySchema],
+  adminNotes: String,
+  passcode: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true
 });
 
-// Define indexes separately to avoid duplicates
-// Create unique indexes here (rather than via field `unique: true`) to
-// ensure a single index declaration and avoid duplicate-index warnings.
+// Indexes
 userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ club: 1, district: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ serviceHours: -1 });
-// Remove the badges.code index if it's causing issues
-// userSchema.index({ 'badges.code': 1 });
 
 // Virtual for profile completion status
 userSchema.virtual('isProfileComplete').get(function() {
@@ -114,9 +138,32 @@ userSchema.methods.updateLastLogin = function() {
   return this.save();
 };
 
+// Method to add role history
+userSchema.methods.addRoleHistory = function(previousRole, newRole, assignedBy, assignedByName, remark = '') {
+  this.roleHistory.push({
+    previousRole,
+    newRole,
+    assignedBy,
+    assignedByName,
+    remark,
+    status: 'active'
+  });
+  return this.save();
+};
+
 // Static method to find by email
 userSchema.statics.findByEmail = function(email) {
   return this.findOne({ email: email.toLowerCase() });
+};
+
+// Static method to find super admins
+userSchema.statics.findSuperAdmins = function() {
+  return this.find({ role: 'super_admin', isActive: true });
+};
+
+// Static method to find webmasters
+userSchema.statics.findWebmasters = function() {
+  return this.find({ role: 'webmaster', isActive: true });
 };
 
 module.exports = mongoose.model('User', userSchema);

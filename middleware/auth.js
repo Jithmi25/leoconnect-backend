@@ -1,6 +1,7 @@
 // middleware/auth.js
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const SuperAdmin = require('../models/SuperAdmin');
 
 exports.protect = async (req, res, next) => {
   try {
@@ -36,6 +37,18 @@ exports.protect = async (req, res, next) => {
         success: false,
         message: 'Account is deactivated. Please contact administrator.'
       });
+    }
+
+    // Check if user is super admin
+    if (user.role === 'super_admin') {
+      const superAdmin = await SuperAdmin.findOne({ user: user._id, isActive: true });
+      if (!superAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Super Admin access revoked.'
+        });
+      }
+      req.superAdmin = superAdmin;
     }
 
     req.user = user;
@@ -75,4 +88,27 @@ exports.authorize = (...roles) => {
     }
     next();
   };
+};
+
+// Super Admin only middleware
+exports.requireSuperAdmin = (req, res, next) => {
+  if (req.user.role !== 'super_admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Super Admin access required.'
+    });
+  }
+  next();
+};
+
+// Webmaster or Super Admin middleware
+exports.requireAdmin = (req, res, next) => {
+  const adminRoles = ['super_admin', 'webmaster'];
+  if (!adminRoles.includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Admin access required.'
+    });
+  }
+  next();
 };

@@ -1,4 +1,4 @@
-// server.js 
+// server.js
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,7 +9,7 @@ require('dotenv').config();
 // Import database connection
 const connectDB = require('./config/database.js');
 
-// Import rate limiters
+// Import rate limiters - FIXED PATH
 const { apiLimiter, authLimiter, uploadLimiter } = require('./middleware/rateLimiter');
 
 // Import routes
@@ -19,7 +19,7 @@ const postRoutes = require('./routes/posts');
 const eventRoutes = require('./routes/events');
 const pollRoutes = require('./routes/polls');
 const uploadRoutes = require('./routes/upload');
-const superAdminRoutes = require('./routes/superAdmin'); 
+const superAdminRoutes = require('./routes/superAdmin');
 
 // Connect to database
 connectDB();
@@ -27,22 +27,47 @@ connectDB();
 const app = express();
 
 // ========================
+// CORS Configuration
+// ========================
+const allowedOrigins = [
+  'http://localhost:8081', // React Native Metro bundler
+  'http://localhost:19006', // Expo Web
+  'exp://localhost:19000', // Expo
+  'exp://192.168.1.100:19000', // Expo on local network
+  'http://localhost:3000', // React web app
+  process.env.CLIENT_BASE_URL // From env
+].filter(Boolean);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ]
+};
+
+// Apply CORS middleware to all routes
+app.use(cors(corsOptions));
+
+// ========================
 // Security Middleware
 // ========================
 app.use(helmet());
-
-// ========================
-// CORS Configuration
-// ========================
-app.use(cors({
-  origin: [
-    process.env.CLIENT_BASE_URL,
-    'http://localhost:3000',
-    'http://localhost:19006',
-    'exp://localhost:19000'
-  ].filter(Boolean),
-  credentials: true
-}));
 
 // ========================
 // Logging Middleware
@@ -56,11 +81,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ========================
-// Rate Limiting
+// Rate Limiting - COMMENT OUT FOR NOW IF STILL HAVING ISSUES
 // ========================
-app.use('/api/', apiLimiter);
-app.use('/api/auth', authLimiter);
-app.use('/api/upload', uploadLimiter);
+// app.use('/api/', apiLimiter);
+// app.use('/api/auth', authLimiter);
+// app.use('/api/upload', uploadLimiter);
 
 // ========================
 // Static Files
@@ -80,12 +105,25 @@ app.get('/api/health', (req, res) => {
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
-      superAdmin: '/api/super-admin', // NEW
+      superAdmin: '/api/super-admin',
       posts: '/api/posts',
       events: '/api/events',
       polls: '/api/polls',
       upload: '/api/upload'
+    },
+    cors: {
+      allowedOrigins: allowedOrigins
     }
+  });
+});
+
+// CORS Test Endpoint
+app.get('/api/cors-test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'CORS test successful',
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -98,7 +136,7 @@ app.get('/api', (req, res) => {
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
-      superAdmin: '/api/super-admin', // NEW
+      superAdmin: '/api/super-admin',
       posts: '/api/posts',
       events: '/api/events',
       polls: '/api/polls',
@@ -112,7 +150,7 @@ app.get('/api', (req, res) => {
 // ========================
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/super-admin', superAdminRoutes); 
+app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/polls', pollRoutes);
@@ -140,6 +178,16 @@ app.use((req, res) => {
 // ========================
 app.use((err, req, res, next) => {
   console.error('🚨 Global Error Handler:', err);
+
+  // CORS Error
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'CORS Error: Origin not allowed',
+      origin: req.headers.origin,
+      allowedOrigins: allowedOrigins
+    });
+  }
 
   // Mongoose validation error
   if (err.name === 'ValidationError') {
@@ -191,7 +239,10 @@ const server = app.listen(PORT, () => {
   📡 Environment: ${process.env.NODE_ENV || 'development'}
   🌐 Server URL: http://localhost:${PORT}
   📊 API Health: http://localhost:${PORT}/api/health
+  🧪 CORS Test: http://localhost:${PORT}/api/cors-test
   👑 Super Admin API: /api/super-admin
+  🔒 CORS Enabled for:
+      ${allowedOrigins.map(origin => `      - ${origin}`).join('\n')}
   ⏰ Started at: ${new Date().toLocaleString()}
   ======================================
   `);

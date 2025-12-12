@@ -4,41 +4,37 @@ const rateLimit = require('express-rate-limit');
 // General API rate limiter
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 1000, // Increased for development
   message: {
     success: false,
-    message: 'Too many requests from this IP, please try again after 15 minutes.'
+    message: 'Too many requests from this IP, please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 });
 
-// Auth rate limiter (stricter)
+// Auth route rate limiter
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login attempts per windowMs
+  max: 100, // Increased for development
   message: {
     success: false,
-    message: 'Too many login attempts from this IP, please try again after 15 minutes.'
+    message: 'Too many login attempts, please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 });
 
-// File upload rate limiter
+// Upload route rate limiter
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 uploads per windowMs
+  max: 50, // Increased for development
   message: {
     success: false,
-    message: 'Too many upload attempts from this IP, please try again after 15 minutes.'
+    message: 'Too many uploads, please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 });
 
-module.exports = {
-  apiLimiter,
-  authLimiter,
-  uploadLimiter
-};
+module.exports = { apiLimiter, authLimiter, uploadLimiter };

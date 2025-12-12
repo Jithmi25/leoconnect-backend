@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['leo_member', 'webmaster'],
+    enum: ['leo_member', 'webmaster','superAdmin'],
     default: 'leo_member'
   },
   badges: [badgeSchema],

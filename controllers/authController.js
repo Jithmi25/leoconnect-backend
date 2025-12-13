@@ -1,4 +1,4 @@
-// controllers/authController.js
+﻿// controllers/authController.js
 const User = require('../models/User');
 const { generateToken, verifyToken, getTokenFromHeader, hasRole, canAccessResource, generateVerificationCode, isValidEmail, validatePassword, calculatePasswordStrength, sanitizeInput, generateRandomString, needsTokenRefresh } = require('../utils/authUtils');
 const { OAuth2Client } = require('google-auth-library');
@@ -19,7 +19,7 @@ exports.googleLogin = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ success: false, message: "You are not registered" });
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
     res.json({
       success: true,
@@ -72,7 +72,7 @@ exports.getCurrentUser = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Get user error:', error);
+    console.error('âŒ Get user error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get user data'
@@ -154,7 +154,7 @@ exports.mockGoogleLogin = async (req, res) => {
       }
 
       user = await User.create(userData);
-      console.log(`✅ ${role} user created:`, user.email);
+      console.log(`âœ… ${role} user created:`, user.email);
     }
 
     const jwtToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
@@ -188,7 +188,7 @@ exports.mockGoogleLogin = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Mock Google login error:', error);
+    console.error('âŒ Mock Google login error:', error);
     res.status(500).json({
       success: false,
       message: 'Mock login failed',
@@ -196,3 +196,6 @@ exports.mockGoogleLogin = async (req, res) => {
     });
   }
 };
+
+
+

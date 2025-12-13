@@ -8,7 +8,8 @@ const {
   updateEvent,
   deleteEvent,
   registerForEvent,
-  unregisterFromEvent
+  getEventRegistrations,
+  getEventStats
 } = require('../controllers/eventController');
 const { protect, authorize } = require('../middleware/auth');
 const { requireWebmaster, requireOwnershipOrWebmaster } = require('../middleware/roleCheck');
@@ -46,10 +47,15 @@ router.delete('/:id', requireOwnershipOrWebmaster('Event'), deleteEvent);
 // @access  Private
 router.post('/:id/register', registerForEvent);
 
-// @desc    Unregister from event
-// @route   POST /api/events/:id/unregister
-// @access  Private
-router.post('/:id/unregister', unregisterFromEvent);
+// @desc    Get event registrations
+// @route   GET /api/events/:id/registrations
+// @access  Private (Webmaster/Admin only)
+router.get('/:id/registrations', requireWebmaster, getEventRegistrations);
+
+// @desc    Get event statistics
+// @route   GET /api/events/:id/stats
+// @access  Private (Webmaster/Admin only)
+router.get('/:id/stats', requireWebmaster, getEventStats);
 
 // @desc    Get user's registered events
 // @route   GET /api/events/my/registered
@@ -60,15 +66,15 @@ router.get('/my/registered', async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
 
     const events = await Event.find({
-      'attendees.user': req.user.id
+      'registrations.user': req.user.id
     })
-      .populate('createdBy', 'fullName displayName profilePhoto')
+      .populate('createdBy', 'fullName displayName profilePhoto club district role')
       .sort({ date: 1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
     const total = await Event.countDocuments({
-      'attendees.user': req.user.id
+      'registrations.user': req.user.id
     });
 
     res.status(200).json({
@@ -83,74 +89,6 @@ router.get('/my/registered', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch registered events'
-    });
-  }
-});
-
-// @desc    Get upcoming events
-// @route   GET /api/events/upcoming/all
-// @access  Private
-router.get('/upcoming/all', async (req, res) => {
-  try {
-    const Event = require('../models/Event');
-    const { limit = 5 } = req.query;
-
-    const events = await Event.find({
-      date: { $gte: new Date() },
-      isPublic: true
-    })
-      .populate('createdBy', 'fullName displayName profilePhoto')
-      .sort({ date: 1 })
-      .limit(parseInt(limit));
-
-    res.status(200).json({
-      success: true,
-      count: events.length,
-      events
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch upcoming events'
-    });
-  }
-});
-
-// @desc    Get events by club
-// @route   GET /api/events/club/:clubName
-// @access  Private
-router.get('/club/:clubName', async (req, res) => {
-  try {
-    const Event = require('../models/Event');
-    const { clubName } = req.params;
-    const { page = 1, limit = 10 } = req.query;
-
-    const events = await Event.find({
-      hostClub: new RegExp(clubName, 'i'),
-      isPublic: true
-    })
-      .populate('createdBy', 'fullName displayName profilePhoto')
-      .sort({ date: 1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Event.countDocuments({
-      hostClub: new RegExp(clubName, 'i'),
-      isPublic: true
-    });
-
-    res.status(200).json({
-      success: true,
-      count: events.length,
-      total,
-      page: parseInt(page),
-      pages: Math.ceil(total / limit),
-      events
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch club events'
     });
   }
 });

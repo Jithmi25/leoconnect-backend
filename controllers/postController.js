@@ -294,3 +294,52 @@ exports.addComment = async (req, res) => {
     });
   }
 };
+
+// @desc    Share post
+// @route   POST /api/posts/:id/share
+// @access  Private
+exports.sharePost = async (req, res) => {
+  try {
+    const { sharedTo, message } = req.body;
+
+    const post = await Post.findById(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Post not found'
+      });
+    }
+
+    // Increment share count
+    post.shares = (post.shares || 0) + 1;
+
+    // Add to sharedBy array
+    post.sharedBy = post.sharedBy || [];
+    post.sharedBy.push({
+      user: req.user.id,
+      sharedAt: new Date(),
+      sharedTo: sharedTo || 'public', // Can be 'public', 'club', 'private', etc.
+      message: message || ''
+    });
+
+    await post.save();
+
+    // If sharing creates a new post (like retweet), you can add that logic here
+    // For now, we just increment the share count
+
+    res.status(200).json({
+      success: true,
+      message: 'Post shared successfully',
+      sharesCount: post.shares,
+      shareId: post.sharedBy[post.sharedBy.length - 1]._id
+    });
+
+  } catch (error) {
+    console.error('❌ Share post error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to share post'
+    });
+  }
+};

@@ -1,36 +1,33 @@
 // controllers/eventController.js
 const Event = require('../models/Event');
-const User = require('../models/User');
+const EventRegistration = require('../models/EventRegistration');
 
 // @desc    Get all events
 // @route   GET /api/events
 // @access  Private
 exports.getEvents = async (req, res) => {
   try {
-    const {
+    const { 
+      status, 
+      category, 
+      club, 
+      district, 
+      eventType,
       page = 1,
-      limit = 10,
-      club,
-      district,
-      status,
-      upcoming = false
+      limit = 10
     } = req.query;
 
-    // Build filter object
     const filter = { isPublic: true };
     
+    if (status) filter.status = status;
+    if (category) filter.category = category;
     if (club) filter.club = club;
     if (district) filter.district = district;
-    if (status) filter.status = status;
-    
-    if (upcoming === 'true') {
-      filter.date = { $gte: new Date() };
-    }
+    if (eventType) filter.eventType = eventType;
 
     const events = await Event.find(filter)
-      .populate('attendees.user', 'fullName displayName profilePhoto club district')
-      .populate('createdBy', 'fullName displayName profilePhoto')
-      .sort({ date: 1, createdAt: -1 })
+      .populate('organizer', 'fullName displayName profilePhoto')
+      .sort({ date: 1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
@@ -46,7 +43,7 @@ exports.getEvents = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Get events error:', error);
+    console.error('Get events error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch events'
@@ -60,8 +57,10 @@ exports.getEvents = async (req, res) => {
 exports.getEvent = async (req, res) => {
   try {
     const event = await Event.findById(req.params.id)
-      .populate('attendees.user', 'fullName displayName profilePhoto club district')
-      .populate('createdBy', 'fullName displayName profilePhoto');
+      .populate('organizer', 'fullName displayName profilePhoto club district role')
+      .populate('registeredUsers', 'fullName displayName profilePhoto')
+      .populate('attendees.user', 'fullName displayName profilePhoto')
+      .populate('gallery.uploadedBy', 'fullName displayName profilePhoto');
 
     if (!event) {
       return res.status(404).json({
@@ -70,13 +69,17 @@ exports.getEvent = async (req, res) => {
       });
     }
 
+    // Increment view count
+    event.viewCount += 1;
+    await event.save();
+
     res.status(200).json({
       success: true,
       event
     });
 
   } catch (error) {
-    console.error('❌ Get event error:', error);
+    console.error('Get event error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch event'
@@ -86,41 +89,17 @@ exports.getEvent = async (req, res) => {
 
 // @desc    Create new event
 // @route   POST /api/events
-// @access  Private (Admin/Webmaster only)
+// @access  Private
 exports.createEvent = async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      date,
-      startTime,
-      endTime,
-      location,
-      address,
-      serviceHours,
-      maxAttendees,
-      registrationDeadline,
-      images
-    } = req.body;
-
     const event = await Event.create({
-      title,
-      description,
-      date,
-      startTime,
-      endTime,
-      location,
-      address,
-      serviceHours,
-      maxAttendees,
-      registrationDeadline,
-      images,
-      hostClub: req.user.club,
-      district: req.user.district,
-      createdBy: req.user.id
+      ...req.body,
+      organizer: req.user.id,
+      club: req.user.club,
+      district: req.user.district
     });
 
-    await event.populate('createdBy', 'fullName displayName profilePhoto');
+    await event.populate('organizer', 'fullName displayName profilePhoto club district role');
 
     res.status(201).json({
       success: true,
@@ -129,92 +108,10 @@ exports.createEvent = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Create event error:', error);
+    console.error('Create event error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create event'
-    });
-  }
-};
-
-// @desc    Update event
-// @route   PUT /api/events/:id
-// @access  Private (Admin/Webmaster only)
-exports.updateEvent = async (req, res) => {
-  try {
-    let event = await Event.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    // Check if user is admin or event creator
-    if (event.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this event'
-      });
-    }
-
-    event = await Event.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('attendees.user', 'fullName displayName profilePhoto club district')
-     .populate('createdBy', 'fullName displayName profilePhoto');
-
-    res.status(200).json({
-      success: true,
-      message: 'Event updated successfully',
-      event
-    });
-
-  } catch (error) {
-    console.error('❌ Update event error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update event'
-    });
-  }
-};
-
-// @desc    Delete event
-// @route   DELETE /api/events/:id
-// @access  Private (Admin/Webmaster only)
-exports.deleteEvent = async (req, res) => {
-  try {
-    const event = await Event.findById(req.params.id);
-
-    if (!event) {
-      return res.status(404).json({
-        success: false,
-        message: 'Event not found'
-      });
-    }
-
-    // Check if user is admin or event creator
-    if (event.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this event'
-      });
-    }
-
-    await Event.findByIdAndDelete(req.params.id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Event deleted successfully'
-    });
-
-  } catch (error) {
-    console.error('❌ Delete event error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete event'
     });
   }
 };
@@ -233,55 +130,64 @@ exports.registerForEvent = async (req, res) => {
       });
     }
 
-    // Check if event is in the future
-    if (new Date(event.date) < new Date()) {
+    // Check if registration is open
+    if (!event.registrationOpen) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot register for past events'
+        message: 'Registration is closed for this event'
       });
     }
 
-    // Check registration deadline
-    if (event.registrationDeadline && new Date(event.registrationDeadline) < new Date()) {
+    // Check if registration deadline has passed
+    if (event.registrationDeadline && new Date() > event.registrationDeadline) {
       return res.status(400).json({
         success: false,
         message: 'Registration deadline has passed'
       });
     }
 
-    // Check if user is already registered
-    if (event.isUserRegistered(req.user.id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Already registered for this event'
-      });
-    }
-
     // Check if event is full
-    if (event.maxAttendees && event.attendees.length >= event.maxAttendees) {
+    if (event.maxAttendees > 0 && event.currentAttendees >= event.maxAttendees) {
       return res.status(400).json({
         success: false,
         message: 'Event is full'
       });
     }
 
-    // Register user
-    event.attendees.push({
-      user: req.user.id,
-      registeredAt: new Date()
+    // Check if already registered
+    const existingRegistration = await EventRegistration.findOne({
+      event: event._id,
+      user: req.user.id
     });
 
-    await event.save();
-    await event.populate('attendees.user', 'fullName displayName profilePhoto club district');
+    if (existingRegistration) {
+      return res.status(400).json({
+        success: false,
+        message: 'Already registered for this event'
+      });
+    }
 
-    res.status(200).json({
+    // Create registration
+    const registration = await EventRegistration.create({
+      event: event._id,
+      user: req.user.id,
+      status: 'registered',
+      paymentStatus: event.fee.amount > 0 ? 'pending' : 'free'
+    });
+
+    // Update event attendee count
+    event.currentAttendees += 1;
+    event.registeredUsers.push(req.user.id);
+    await event.save();
+
+    res.status(201).json({
       success: true,
-      message: 'Successfully registered for event',
-      attendeesCount: event.attendees.length
+      message: 'Registered for event successfully',
+      registration
     });
 
   } catch (error) {
-    console.error('❌ Event registration error:', error);
+    console.error('Event registration error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to register for event'
@@ -289,10 +195,10 @@ exports.registerForEvent = async (req, res) => {
   }
 };
 
-// @desc    Unregister from event
-// @route   POST /api/events/:id/unregister
+// @desc    Share event
+// @route   POST /api/events/:id/share
 // @access  Private
-exports.unregisterFromEvent = async (req, res) => {
+exports.shareEvent = async (req, res) => {
   try {
     const event = await Event.findById(req.params.id);
 
@@ -303,24 +209,53 @@ exports.unregisterFromEvent = async (req, res) => {
       });
     }
 
-    // Remove user from attendees
-    event.attendees = event.attendees.filter(
-      attendee => attendee.user.toString() !== req.user.id
-    );
-
+    // Increment share count
+    event.shareCount += 1;
     await event.save();
 
     res.status(200).json({
       success: true,
-      message: 'Successfully unregistered from event',
-      attendeesCount: event.attendees.length
+      message: 'Event shared successfully',
+      shareCount: event.shareCount
     });
 
   } catch (error) {
-    console.error('❌ Event unregistration error:', error);
+    console.error('Share event error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to unregister from event'
+      message: 'Failed to share event'
+    });
+  }
+};
+
+// @desc    Get user's registered events
+// @route   GET /api/events/user/registered
+// @access  Private
+exports.getUserRegisteredEvents = async (req, res) => {
+  try {
+    const registrations = await EventRegistration.find({ 
+      user: req.user.id 
+    })
+    .populate({
+      path: 'event',
+      populate: {
+        path: 'organizer',
+        select: 'fullName displayName profilePhoto'
+      }
+    })
+    .sort({ registrationDate: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: registrations.length,
+      registrations
+    });
+
+  } catch (error) {
+    console.error('Get user events error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user events'
     });
   }
 };

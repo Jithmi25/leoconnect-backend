@@ -73,6 +73,26 @@ const postSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  sharedBy: [{
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  sharedAt: {
+    type: Date,
+    default: Date.now
+  },
+  sharedTo: {
+    type: String,
+    enum: ['public', 'club', 'private', 'direct'],
+    default: 'public'
+  },
+  message: String
+}],
+shares: {
+  type: Number,
+  default: 0
+},
   viewCount: {
     type: Number,
     default: 0

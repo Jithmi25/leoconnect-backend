@@ -8,7 +8,8 @@ const {
   updatePost,
   deletePost,
   likePost,
-  addComment
+  addComment,
+  sharePost
 } = require('../controllers/postController');
 const { protect, authorize } = require('../middleware/auth');
 const { requireOwnershipOrWebmaster } = require('../middleware/roleCheck');
@@ -50,6 +51,11 @@ router.post('/:id/like', likePost);
 // @route   POST /api/posts/:id/comment
 // @access  Private
 router.post('/:id/comment', addComment);
+
+// @desc    Share post
+// @route   POST /api/posts/:id/share
+// @access  Private
+router.post('/:id/share', sharePost);
 
 // @desc    Get posts by club
 // @route   GET /api/posts/club/:clubName
